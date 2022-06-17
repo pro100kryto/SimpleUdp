@@ -275,6 +275,22 @@ namespace SimpleUdp
         /// Send a datagram to the specific IP address and UDP port.
         /// This will throw a SocketException if the report UDP port is unreachable.
         /// </summary>
+        /// <param name="ipe">Remote end point.</param>
+        /// <param name="text">Text to send.</param>
+        public void Send(IPEndPoint ipe, string text)
+        {
+            byte[] data = Encoding.UTF8.GetBytes(text);
+            SendInternal(
+                ipe,
+                data,
+                0,
+                data.Length);
+        }
+
+        /// <summary>
+        /// Send a datagram to the specific IP address and UDP port.
+        /// This will throw a SocketException if the report UDP port is unreachable.
+        /// </summary>
         /// <param name="ip">IP address.</param>
         /// <param name="port">Port.</param>
         /// <param name="data">Bytes.</param>
@@ -282,6 +298,21 @@ namespace SimpleUdp
         {
             SendInternal(
                 new IPEndPoint(IPAddress.Parse(ip), port),
+                data,
+                0,
+                data.Length);
+        }
+
+        /// <summary>
+        /// Send a datagram to the specific IP address and UDP port.
+        /// This will throw a SocketException if the report UDP port is unreachable.
+        /// </summary>
+        /// <param name="ipe">Remote end point.</param>
+        /// <param name="data">Bytes.</param>
+        public void Send(IPEndPoint ipe, byte[] data)
+        {
+            SendInternal(
+                ipe,
                 data,
                 0,
                 data.Length);
@@ -298,6 +329,21 @@ namespace SimpleUdp
         {
             SendInternal(
                 new IPEndPoint(IPAddress.Parse(ip), port),
+                data,
+                offset,
+                size);
+        }
+
+        /// <summary>
+        /// Send a datagram to the specific IP address and UDP port with specific offset and size.
+        /// This will throw a SocketException if the report UDP port is unreachable.
+        /// </summary>
+        /// <param name="ipe">Remote end point.</param>
+        /// <param name="data">Bytes.</param>
+        public void SendOffset(IPEndPoint ipe, byte[] data, int offset, int size)
+        {
+            SendInternal(
+                ipe,
                 data,
                 offset,
                 size);
@@ -325,6 +371,23 @@ namespace SimpleUdp
         /// Send a datagram asynchronously to the specific IP address and UDP port.
         /// This will throw a SocketException if the report UDP port is unreachable.
         /// </summary>
+        /// <param name="ipe">Remote end point.</param>
+        /// <param name="text">Text to send.</param>
+        public async Task SendAsync(IPEndPoint ipe, string text)
+        {
+            byte[] data = Encoding.UTF8.GetBytes(text);
+            await SendInternalAsync(
+                ipe,
+                data,
+                0,
+                data.Length)
+            .ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Send a datagram asynchronously to the specific IP address and UDP port.
+        /// This will throw a SocketException if the report UDP port is unreachable.
+        /// </summary>
         /// <param name="ip">IP address.</param>
         /// <param name="port">Port.</param>
         /// <param name="data">Bytes.</param> 
@@ -332,6 +395,22 @@ namespace SimpleUdp
         {
             await SendInternalAsync(
                 new IPEndPoint(IPAddress.Parse(ip), port),
+                data,
+                0,
+                data.Length)
+            .ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Send a datagram asynchronously to the specific IP address and UDP port.
+        /// This will throw a SocketException if the report UDP port is unreachable.
+        /// </summary>
+        /// <param name="ipe">Remote end point.</param>
+        /// <param name="data">Bytes.</param> 
+        public async Task SendAsync(IPEndPoint ipe, byte[] data)
+        {
+            await SendInternalAsync(
+                ipe,
                 data,
                 0,
                 data.Length)
@@ -349,6 +428,22 @@ namespace SimpleUdp
         {
             await SendInternalAsync(
                 new IPEndPoint(IPAddress.Parse(ip), port),
+                data,
+                offset,
+                size)
+            .ConfigureAwait(false);
+        }
+
+        /// <summary>
+        /// Send a datagram asynchronously to the specific IP address and UDP port with specific offset and size.
+        /// This will throw a SocketException if the report UDP port is unreachable.
+        /// </summary>
+        /// <param name="ipe">Remote end point.</param>
+        /// <param name="data">Bytes.</param> 
+        public async Task SendOffsetAsync(IPEndPoint ipe, byte[] data, int offset, int size)
+        {
+            await SendInternalAsync(
+                ipe,
                 data,
                 offset,
                 size)
