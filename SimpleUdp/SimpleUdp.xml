@@ -105,10 +105,29 @@
         <member name="M:SimpleUdp.UdpEndpoint.#ctor(System.String,System.Int32)">
             <summary>
             Instantiate the UDP endpoint.
-            If you wish to also receive datagrams, set the 'DatagramReceived' event and call 'StartServer()'.
+            If you wish to also receive datagrams, set the 'DatagramReceived' event and call 'Start()'.
             </summary>
-            <param name="ip">Local IP address.</param>
+            <param name="hostname">Local hostname.</param>
             <param name="port">Local port number.</param>
+        </member>
+        <member name="M:SimpleUdp.UdpEndpoint.#ctor(System.Int32)">
+            <summary>
+            Instantiate the UDP endpoint.
+            If you wish to also receive datagrams, set the 'DatagramReceived' event and call 'Start()'.
+            </summary>
+            <param name="port">Local port number.</param>
+        </member>
+        <member name="M:SimpleUdp.UdpEndpoint.#ctor(System.Net.Sockets.UdpClient)">
+            <summary>
+            Use existing Socket from UdpClient.
+            If you wish to also receive datagrams, set the 'DatagramReceived' event and call 'Start()'.
+            </summary>
+        </member>
+        <member name="M:SimpleUdp.UdpEndpoint.#ctor(System.Net.Sockets.Socket)">
+            <summary>
+            Use existing Socket.
+            If you wish to also receive datagrams, set the 'DatagramReceived' event and call 'Start()'.
+            </summary>
         </member>
         <member name="M:SimpleUdp.UdpEndpoint.Dispose">
             <summary>
@@ -125,6 +144,7 @@
             <summary>
             Start the UDP listener to receive datagrams.  Before calling this method, set the 'DatagramReceived' event.
             </summary>
+            <exception cref="T:System.InvalidOperationException">Already started</exception>
         </member>
         <member name="M:SimpleUdp.UdpEndpoint.Stop">
             <summary>
