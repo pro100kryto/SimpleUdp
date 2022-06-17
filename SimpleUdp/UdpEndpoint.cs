@@ -74,6 +74,15 @@ namespace SimpleUdp
         public bool Disposed { get; private set; }
         public bool Started { get; private set; }
 
+        /// <summary>
+        /// Time to live, the maximum number of routers the packet is allowed to traverse.
+        /// </summary>
+        public short Ttl
+        {
+            get => _Socket.Ttl;
+            set => _Socket.Ttl = value;
+        }
+
         #endregion
 
         #region Private-Members
@@ -108,22 +117,24 @@ namespace SimpleUdp
         #region Constructors-and-Factories
 
         /// <summary>
-        /// Instantiate the UDP endpoint.
+        /// Instantiate the UDP endpoint with default Ttl = 64.
         /// If you wish to also receive datagrams, set the 'DatagramReceived' event and call 'Start()'.
         /// </summary>
         /// <param name="hostname">Local hostname.</param>
         /// <param name="port">Local port number.</param>
         public UdpEndpoint(string hostname, int port = 0) : this(new UdpClient(hostname, port))
         {
+            Ttl = 64;
         }
 
         /// <summary>
-        /// Instantiate the UDP endpoint.
+        /// Instantiate the UDP endpoint with default Ttl = 64.
         /// If you wish to also receive datagrams, set the 'DatagramReceived' event and call 'Start()'.
         /// </summary>
         /// <param name="port">Local port number.</param>
         public UdpEndpoint(int port = 0) : this(new UdpClient(port))
         {
+            Ttl = 64;
         }
 
         /// <summary>
@@ -190,7 +201,6 @@ namespace SimpleUdp
 
             State state = new State(_MaxDatagramSize);
 
-            _Socket.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.ReuseAddress, true);
             _Events.HandleStarted(this);
 
             _Socket.BeginReceiveFrom(state.Buffer, 0, _MaxDatagramSize, SocketFlags.None, ref _Endpoint, _ReceiveCallback = (ar) =>
@@ -251,11 +261,14 @@ namespace SimpleUdp
         /// <param name="ip">IP address.</param>
         /// <param name="port">Port.</param>
         /// <param name="text">Text to send.</param>
-        /// <param name="ttl">Time to live, the maximum number of routers the packet is allowed to traverse.  Minimum is 0, default is 64.</param>
-        public void Send(string ip, int port, string text, short ttl = 64)
+        public void Send(string ip, int port, string text)
         {
             byte[] data = Encoding.UTF8.GetBytes(text);
-            SendInternal(ip, port, data, 0, data.Length, ttl); 
+            SendInternal(
+                new IPEndPoint(IPAddress.Parse(ip), port),
+                data,
+                0,
+                data.Length); 
         }
 
         /// <summary>
@@ -265,10 +278,13 @@ namespace SimpleUdp
         /// <param name="ip">IP address.</param>
         /// <param name="port">Port.</param>
         /// <param name="data">Bytes.</param>
-        /// <param name="ttl">Time to live, the maximum number of routers the packet is allowed to traverse.  Minimum is 0, default is 64.</param>
-        public void Send(string ip, int port, byte[] data, short ttl = 64)
+        public void Send(string ip, int port, byte[] data)
         {
-            SendInternal(ip, port, data, 0, data.Length, ttl);
+            SendInternal(
+                new IPEndPoint(IPAddress.Parse(ip), port),
+                data,
+                0,
+                data.Length);
         }
 
         /// <summary>
@@ -278,10 +294,13 @@ namespace SimpleUdp
         /// <param name="ip">IP address.</param>
         /// <param name="port">Port.</param>
         /// <param name="data">Bytes.</param>
-        /// <param name="ttl">Time to live, the maximum number of routers the packet is allowed to traverse.  Minimum is 0, default is 64.</param>
-        public void SendOffset(string ip, int port, byte[] data, int offset, int size, short ttl = 64)
+        public void SendOffset(string ip, int port, byte[] data, int offset, int size)
         {
-            SendInternal(ip, port, data, offset, size, ttl);
+            SendInternal(
+                new IPEndPoint(IPAddress.Parse(ip), port),
+                data,
+                offset,
+                size);
         }
 
         /// <summary>
@@ -291,11 +310,15 @@ namespace SimpleUdp
         /// <param name="ip">IP address.</param>
         /// <param name="port">Port.</param>
         /// <param name="text">Text to send.</param>
-        /// <param name="ttl">Time to live, the maximum number of routers the packet is allowed to traverse.  Minimum is 0, default is 64.</param>
-        public async Task SendAsync(string ip, int port, string text, short ttl = 64)
+        public async Task SendAsync(string ip, int port, string text)
         {
             byte[] data = Encoding.UTF8.GetBytes(text);
-            await SendInternalAsync(ip, port, data, 0, data.Length, ttl).ConfigureAwait(false);
+            await SendInternalAsync(
+                new IPEndPoint(IPAddress.Parse(ip), port),
+                data,
+                0,
+                data.Length)
+            .ConfigureAwait(false);
         }
 
         /// <summary>
@@ -305,10 +328,14 @@ namespace SimpleUdp
         /// <param name="ip">IP address.</param>
         /// <param name="port">Port.</param>
         /// <param name="data">Bytes.</param> 
-        /// <param name="ttl">Time to live, the maximum number of routers the packet is allowed to traverse.  Minimum is 0, default is 64.</param>
-        public async Task SendAsync(string ip, int port, byte[] data, short ttl = 64)
+        public async Task SendAsync(string ip, int port, byte[] data)
         {
-            await SendInternalAsync(ip, port, data, 0, data.Length, ttl).ConfigureAwait(false);
+            await SendInternalAsync(
+                new IPEndPoint(IPAddress.Parse(ip), port),
+                data,
+                0,
+                data.Length)
+            .ConfigureAwait(false);
         }
 
         /// <summary>
@@ -318,62 +345,34 @@ namespace SimpleUdp
         /// <param name="ip">IP address.</param>
         /// <param name="port">Port.</param>
         /// <param name="data">Bytes.</param> 
-        /// <param name="ttl">Time to live, the maximum number of routers the packet is allowed to traverse.  Minimum is 0, default is 64.</param>
-        public async Task SendOffsetAsync(string ip, int port, byte[] data, int offset, int size, short ttl = 64)
+        public async Task SendOffsetAsync(string ip, int port, byte[] data, int offset, int size)
         {
-            await SendInternalAsync(ip, port, data, offset, size, ttl).ConfigureAwait(false);
+            await SendInternalAsync(
+                new IPEndPoint(IPAddress.Parse(ip), port),
+                data,
+                offset,
+                size)
+            .ConfigureAwait(false);
         }
 
         #endregion
 
         #region Private-Methods
 
-        private void SendInternal(string ip, int port, byte[] data, int offset, int size, short ttl)
+        private void SendInternal(IPEndPoint ipe, byte[] data, int offset, int size)
         {
-            if (ttl < 0) throw new ArgumentOutOfRangeException(nameof(ttl));
             if (data == null || data.Length == 0) throw new ArgumentNullException(nameof(data));
             if (data.Length > _MaxDatagramSize) throw new ArgumentException("Data exceed maximum datagram size (" + data.Length + " data bytes, " + _MaxDatagramSize + " bytes).");
 
-            _SendLock.Wait();
-
-            IPEndPoint ipe = new IPEndPoint(IPAddress.Parse(ip), port);
-
-            try
-            {
-                _Socket.Ttl = ttl;
-                _Socket.SendTo(data, offset, size, SocketFlags.None, ipe);
-            }
-            finally
-            {
-                _SendLock.Release();
-            }
+            _Socket.SendTo(data, offset, size, SocketFlags.None, ipe);
         }
 
-        private async Task SendInternalAsync(string ip, int port, byte[] data, int offset, int size, short ttl)
+        private async Task SendInternalAsync(IPEndPoint ipe, byte[] data, int offset, int size)
         {
-            if (ttl < 0) throw new ArgumentOutOfRangeException(nameof(ttl));
             if (data == null || data.Length == 0) throw new ArgumentNullException(nameof(data));
             if (data.Length > _MaxDatagramSize) throw new ArgumentException("Data exceed maximum datagram size (" + data.Length + " data bytes, " + _MaxDatagramSize + " bytes).");
 
-            await _SendLock.WaitAsync();
-
-            IPEndPoint ipe = new IPEndPoint(IPAddress.Parse(ip), port);
-
-            try
-            {
-                _Socket.Ttl = ttl;
-                await _Socket.SendToAsync(new ArraySegment<byte>(data, offset, size), SocketFlags.None, ipe).ConfigureAwait(false);
-            }
-            catch (TaskCanceledException)
-            {
-            }
-            catch (OperationCanceledException)
-            {
-            }
-            finally
-            {
-                _SendLock.Release();
-            }
+            await _Socket.SendToAsync(new ArraySegment<byte>(data, offset, size), SocketFlags.None, ipe).ConfigureAwait(false);
         }
 
         #endregion
