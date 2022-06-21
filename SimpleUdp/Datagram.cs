@@ -1,6 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
-using System.Text;
+using System.Net;
 
 namespace SimpleUdp
 {
@@ -9,34 +8,29 @@ namespace SimpleUdp
     /// </summary>
     public class Datagram
     {
-        /// <summary>
-        /// IP address of the remote endpoint.
-        /// </summary>
-        public string Ip { get; }
+        public static readonly IPEndPoint anyIPEndPoint = new IPEndPoint(IPAddress.Any, 0);
 
         /// <summary>
-        /// Port number of the remote endpoint.
+        /// remote endpoint.
         /// </summary>
-        public int Port { get; }
+        public EndPoint endPoint = anyIPEndPoint;
 
         /// <summary>
         /// Data received from the remote endpoint.
         /// </summary>
-        public byte[] Data { get; }
+        public byte[] data;
 
-        internal Datagram()
+        public int dataSize = 0;
+        public int dataOffset = 0;
+
+        public Datagram(int bufferSize)
         {
-
+            data = new byte[bufferSize];
         }
 
-        internal Datagram(string ip, int port, byte[] data)
+        public Datagram(byte[] data)
         {
-            if (String.IsNullOrEmpty(ip)) throw new ArgumentNullException(nameof(ip));
-            if (port < 0 || port > 65535) throw new ArgumentException("Port must be greater than or equal to zero and less than or equal to 65535.");
-
-            Ip = ip;
-            Port = port;
-            Data = data;
+            this.data = data;
         }
     }
 }

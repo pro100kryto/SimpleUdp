@@ -5,7 +5,6 @@ using System.Net.Sockets;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using Caching;
 
 namespace SimpleUdp
 {
@@ -19,7 +18,7 @@ namespace SimpleUdp
         /// <summary>
         /// Event to fire when a new endpoint is detected.
         /// </summary>
-        public event EventHandler<EndpointMetadata> EndpointDetected;
+        public event EventHandler<EndPoint> EndpointDetected;
 
         /// <summary>
         /// Event to fire when a datagram is received.
@@ -27,29 +26,20 @@ namespace SimpleUdp
         public event EventHandler<Datagram> DatagramReceived;
 
         /// <summary>
-        /// Retrieve a list of (up to) the 100 most recently seen endpoints.
+        /// Retrieve a list of remote endpoints.
         /// </summary>
-        public List<string> Endpoints
-        {
-            get
-            {
-                return _RemoteSockets.GetKeys();
-            }
-        }
+        public List<EndPoint> Endpoints { get; } = new List<EndPoint>();
 
         /// <summary>
         /// Maximum datagram size, must be greater than zero and less than or equal to 65507.
         /// </summary>
         public int MaxDatagramSize
         {
-            get
-            {
-                return _MaxDatagramSize;
-            }
+            get => _maxDatagramSize;
             set
             {
                 if (value < 1 || value > 65507) throw new ArgumentException("MaxDatagramSize must be greater than zero and less than or equal to 65507.");
-                _MaxDatagramSize = value;
+                _maxDatagramSize = value;
             }
         }
 
@@ -58,18 +48,15 @@ namespace SimpleUdp
         /// </summary>
         public SimpleUdpEvents Events
         {
-            get
-            {
-                return _Events;
-            }
+            get => _events;
             set
             {
                 if (value == null) throw new ArgumentNullException(nameof(Events));
-                _Events = value;
+                _events = value;
             }
         }
         
-        public IPEndPoint LocalIPEndPoint => _Socket.LocalEndPoint as IPEndPoint;
+        public EndPoint LocalEndPoint => _socket.LocalEndPoint;
 
         public bool Disposed { get; private set; }
         public bool Started { get; private set; }
@@ -79,38 +66,19 @@ namespace SimpleUdp
         /// </summary>
         public short Ttl
         {
-            get => _Socket.Ttl;
-            set => _Socket.Ttl = value;
+            get => _socket.Ttl;
+            set => _socket.Ttl = value;
         }
 
         #endregion
 
         #region Private-Members
         
-        private Socket _Socket = null;
-        private int _MaxDatagramSize = 65507;
-        private EndPoint _Endpoint = new IPEndPoint(IPAddress.Any, 0);
-        private AsyncCallback _ReceiveCallback = null;
+        private Socket _socket = null;
+        private int _maxDatagramSize = 65507;
+        private AsyncCallback _receiveCallback = null;
 
-        private LRUCache<string, Socket> _RemoteSockets = new LRUCache<string, Socket>(100, 1, null, false);
-         
-        private SemaphoreSlim _SendLock = new SemaphoreSlim(1, 1);
-
-        private SimpleUdpEvents _Events = new SimpleUdpEvents();
-
-        #endregion
-
-        #region Internal-Classes
-
-        internal class State
-        {
-            internal State(int bufferSize)
-            {
-                Buffer = new byte[bufferSize];
-            }
-
-            internal byte[] Buffer = null;
-        }
+        private SimpleUdpEvents _events = new SimpleUdpEvents();
 
         #endregion
 
@@ -143,7 +111,7 @@ namespace SimpleUdp
         /// </summary>
         public UdpEndpoint(UdpClient udpClient) : this(udpClient.Client)
         {
-            _Socket.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.ReuseAddress, true);
+            _socket.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.ReuseAddress, true);
         }
 
         /// <summary>
@@ -152,7 +120,7 @@ namespace SimpleUdp
         /// </summary>
         public UdpEndpoint(Socket socket)
         {
-            _Socket = socket;
+            _socket = socket;
         }
 
         #endregion
@@ -181,7 +149,7 @@ namespace SimpleUdp
                 Disposed = true;
                 try
                 {
-                    _Socket.Dispose();
+                    _socket.Dispose();
                 } finally
                 {
                     Started = false;
@@ -197,47 +165,48 @@ namespace SimpleUdp
         public void Start()
         {
             if (Started) throw new InvalidOperationException("Already started");
+
             Started = true;
+            _events.HandleStarted(this);
 
-            State state = new State(_MaxDatagramSize);
+            BeginReceive();
 
-            _Events.HandleStarted(this);
-
-            _Socket.BeginReceiveFrom(state.Buffer, 0, _MaxDatagramSize, SocketFlags.None, ref _Endpoint, _ReceiveCallback = (ar) =>
+            new Thread(() =>
             {
                 try
                 {
-                    State so = (State)ar.AsyncState;
-                    _Socket.BeginReceiveFrom(so.Buffer, 0, _MaxDatagramSize, SocketFlags.None, ref _Endpoint, _ReceiveCallback, so);
-                    int bytes = _Socket.EndReceiveFrom(ar, ref _Endpoint);
-
-                    string ipPort = _Endpoint.ToString();
-                    string ip = null;
-                    int port = 0;
-                    Common.ParseIpPort(ipPort, out ip, out port);
-
-                    if (!_RemoteSockets.Contains(ipPort))
+                    while (Started)
                     {
-                        _RemoteSockets.AddReplace(ipPort, _Socket);
-                        EndpointDetected?.Invoke(this, new EndpointMetadata(ip, port));
+                        BeginReceive();
                     }
-
-                    if (bytes == so.Buffer.Length)
-                    {
-                        DatagramReceived?.Invoke(this, new Datagram(ip, port, so.Buffer));
-                    }
-                    else
-                    {
-                        byte[] buffer = new byte[bytes];
-                        Buffer.BlockCopy(so.Buffer, 0, buffer, 0, bytes);
-                        DatagramReceived?.Invoke(this, new Datagram(ip, port, buffer));
-                    }
-                }
-                catch (Exception)
+                } catch(Exception)
                 {
-                    _Events.HandleStopped(this);
+                    _events.HandleStopped(this);
+
                 }
-            }, state);            
+            }).Start();
+
+        }
+
+        private void BeginReceive()
+        {
+            var state = new Datagram(_maxDatagramSize);
+            _socket.BeginReceiveFrom(state.data, 0, _maxDatagramSize, SocketFlags.None, ref state.endPoint, EndReceive, state);
+        }
+
+        private void EndReceive(IAsyncResult result)
+        {
+            var state = (Datagram)result.AsyncState;
+
+            state.dataSize = _socket.EndReceiveFrom(result, ref state.endPoint);
+
+            if (!Endpoints.Contains(state.endPoint))
+            {
+                Endpoints.Add(state.endPoint);
+                EndpointDetected?.Invoke(this, state.endPoint);
+            }
+
+            DatagramReceived?.Invoke(this, state);
         }
 
         /// <summary>
@@ -247,7 +216,7 @@ namespace SimpleUdp
         {
             try
             {
-                _Socket.Close();
+                _socket.Close();
             } finally
             {
                 Started = false;
@@ -277,7 +246,7 @@ namespace SimpleUdp
         /// </summary>
         /// <param name="ipe">Remote end point.</param>
         /// <param name="text">Text to send.</param>
-        public void Send(IPEndPoint ipe, string text)
+        public void Send(EndPoint ipe, string text)
         {
             byte[] data = Encoding.UTF8.GetBytes(text);
             SendInternal(
@@ -309,7 +278,7 @@ namespace SimpleUdp
         /// </summary>
         /// <param name="ipe">Remote end point.</param>
         /// <param name="data">Bytes.</param>
-        public void Send(IPEndPoint ipe, byte[] data)
+        public void Send(EndPoint ipe, byte[] data)
         {
             SendInternal(
                 ipe,
@@ -340,7 +309,7 @@ namespace SimpleUdp
         /// </summary>
         /// <param name="ipe">Remote end point.</param>
         /// <param name="data">Bytes.</param>
-        public void SendOffset(IPEndPoint ipe, byte[] data, int offset, int size)
+        public void SendOffset(EndPoint ipe, byte[] data, int offset, int size)
         {
             SendInternal(
                 ipe,
@@ -373,7 +342,7 @@ namespace SimpleUdp
         /// </summary>
         /// <param name="ipe">Remote end point.</param>
         /// <param name="text">Text to send.</param>
-        public async Task SendAsync(IPEndPoint ipe, string text)
+        public async Task SendAsync(EndPoint ipe, string text)
         {
             byte[] data = Encoding.UTF8.GetBytes(text);
             await SendInternalAsync(
@@ -407,7 +376,7 @@ namespace SimpleUdp
         /// </summary>
         /// <param name="ipe">Remote end point.</param>
         /// <param name="data">Bytes.</param> 
-        public async Task SendAsync(IPEndPoint ipe, byte[] data)
+        public async Task SendAsync(EndPoint ipe, byte[] data)
         {
             await SendInternalAsync(
                 ipe,
@@ -440,7 +409,7 @@ namespace SimpleUdp
         /// </summary>
         /// <param name="ipe">Remote end point.</param>
         /// <param name="data">Bytes.</param> 
-        public async Task SendOffsetAsync(IPEndPoint ipe, byte[] data, int offset, int size)
+        public async Task SendOffsetAsync(EndPoint ipe, byte[] data, int offset, int size)
         {
             await SendInternalAsync(
                 ipe,
@@ -454,20 +423,20 @@ namespace SimpleUdp
 
         #region Private-Methods
 
-        private void SendInternal(IPEndPoint ipe, byte[] data, int offset, int size)
+        private void SendInternal(EndPoint ipe, byte[] data, int offset, int size)
         {
             if (data == null || data.Length == 0) throw new ArgumentNullException(nameof(data));
-            if (data.Length > _MaxDatagramSize) throw new ArgumentException("Data exceed maximum datagram size (" + data.Length + " data bytes, " + _MaxDatagramSize + " bytes).");
+            if (size > _maxDatagramSize) throw new ArgumentException("Data exceed maximum datagram size (" + data.Length + " data bytes, " + _maxDatagramSize + " bytes).");
 
-            _Socket.SendTo(data, offset, size, SocketFlags.None, ipe);
+            _socket.SendTo(data, offset, size, SocketFlags.None, ipe);
         }
 
-        private async Task SendInternalAsync(IPEndPoint ipe, byte[] data, int offset, int size)
+        private async Task SendInternalAsync(EndPoint ipe, byte[] data, int offset, int size)
         {
             if (data == null || data.Length == 0) throw new ArgumentNullException(nameof(data));
-            if (data.Length > _MaxDatagramSize) throw new ArgumentException("Data exceed maximum datagram size (" + data.Length + " data bytes, " + _MaxDatagramSize + " bytes).");
+            if (size > _maxDatagramSize) throw new ArgumentException("Data exceed maximum datagram size (" + data.Length + " data bytes, " + _maxDatagramSize + " bytes).");
 
-            await _Socket.SendToAsync(new ArraySegment<byte>(data, offset, size), SocketFlags.None, ipe).ConfigureAwait(false);
+            await _socket.SendToAsync(new ArraySegment<byte>(data, offset, size), SocketFlags.None, ipe).ConfigureAwait(false);
         }
 
         #endregion
