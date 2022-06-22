@@ -31,19 +31,6 @@ namespace SimpleUdp
         public List<EndPoint> Endpoints { get; } = new List<EndPoint>();
 
         /// <summary>
-        /// Maximum datagram size, must be greater than zero and less than or equal to 65507.
-        /// </summary>
-        public int MaxDatagramSize
-        {
-            get => _maxDatagramSize;
-            set
-            {
-                if (value < 1 || value > 65507) throw new ArgumentException("MaxDatagramSize must be greater than zero and less than or equal to 65507.");
-                _maxDatagramSize = value;
-            }
-        }
-
-        /// <summary>
         /// Events.
         /// </summary>
         public SimpleUdpEvents Events
@@ -55,54 +42,50 @@ namespace SimpleUdp
                 _events = value;
             }
         }
-        
-        public EndPoint LocalEndPoint => _socket.LocalEndPoint;
 
         public bool Disposed { get; private set; }
-        public bool Started { get; private set; }
+        public bool Started => _receiveThread !=null && _receiveThread.IsAlive;
 
-        /// <summary>
-        /// Time to live, the maximum number of routers the packet is allowed to traverse.
-        /// </summary>
-        public short Ttl
-        {
-            get => _socket.Ttl;
-            set => _socket.Ttl = value;
-        }
+        public Socket Socket => _socket;
 
         #endregion
 
         #region Private-Members
         
         private Socket _socket = null;
-        private int _maxDatagramSize = 65507;
-        private AsyncCallback _receiveCallback = null;
 
         private SimpleUdpEvents _events = new SimpleUdpEvents();
+
+        private Thread _receiveThread = null;
+        private readonly ReaderWriterLock _liveLock = new ReaderWriterLock();
 
         #endregion
 
         #region Constructors-and-Factories
 
         /// <summary>
-        /// Instantiate the UDP endpoint with default Ttl = 64.
+        /// Instantiate the UDP endpoint with default Ttl = 64 and BufferSize = 1024.
         /// If you wish to also receive datagrams, set the 'DatagramReceived' event and call 'Start()'.
         /// </summary>
         /// <param name="hostname">Local hostname.</param>
         /// <param name="port">Local port number.</param>
         public UdpEndpoint(string hostname, int port = 0) : this(new UdpClient(hostname, port))
         {
-            Ttl = 64;
+            _socket.Ttl = 64;
+            _socket.ReceiveBufferSize = 1024;
+            _socket.SendBufferSize = 1024;
         }
 
         /// <summary>
-        /// Instantiate the UDP endpoint with default Ttl = 64.
+        /// Instantiate the UDP endpoint with default Ttl = 64 and BufferSize = 1024.
         /// If you wish to also receive datagrams, set the 'DatagramReceived' event and call 'Start()'.
         /// </summary>
         /// <param name="port">Local port number.</param>
         public UdpEndpoint(int port = 0) : this(new UdpClient(port))
         {
-            Ttl = 64;
+            _socket.Ttl = 64;
+            _socket.ReceiveBufferSize = 1024;
+            _socket.SendBufferSize = 1024;
         }
 
         /// <summary>
@@ -128,85 +111,38 @@ namespace SimpleUdp
         #region Public-Methods
 
         /// <summary>
-        /// Dispose.
-        /// </summary>
-        public void Dispose()
-        {
-            Dispose(true);
-            GC.SuppressFinalize(this);
-        }
-
-        /// <summary>
-        /// Dispose.
-        /// </summary>
-        /// <param name="disposing">Disposing.</param>
-        protected virtual void Dispose(bool disposing)
-        {
-            if (Disposed) return;
-
-            if (disposing)
-            {
-                Disposed = true;
-                try
-                {
-                    _socket.Dispose();
-                } finally
-                {
-                    Started = false;
-                }
-            }
-        }
-
-
-        /// <summary>
         /// Start the UDP listener to receive datagrams.  Before calling this method, set the 'DatagramReceived' event.
         /// </summary>
         /// <exception cref="InvalidOperationException">Already started</exception>
         public void Start()
         {
-            if (Started) throw new InvalidOperationException("Already started");
-
-            Started = true;
-            _events.HandleStarted(this);
-
-            BeginReceive();
-
-            new Thread(() =>
+            _liveLock.AcquireWriterLock(Math.Max(_socket.ReceiveTimeout, 1000) * 2);
+            try
             {
-                try
+                if (Started) throw new InvalidOperationException("Already started");
+
+                _receiveThread = new Thread(() =>
                 {
-                    while (Started)
+                    try
                     {
-                        BeginReceive();
+                        while (true)
+                        {
+                            BeginReceive();
+                        }
                     }
-                } catch(Exception)
-                {
+                    catch (Exception)
+                    {
+                    }
                     _events.HandleStopped(this);
+                });
+                _receiveThread.Start();
 
-                }
-            }).Start();
-
-        }
-
-        private void BeginReceive()
-        {
-            var state = new Datagram(_maxDatagramSize);
-            _socket.BeginReceiveFrom(state.data, 0, _maxDatagramSize, SocketFlags.None, ref state.endPoint, EndReceive, state);
-        }
-
-        private void EndReceive(IAsyncResult result)
-        {
-            var state = (Datagram)result.AsyncState;
-
-            state.dataSize = _socket.EndReceiveFrom(result, ref state.endPoint);
-
-            if (!Endpoints.Contains(state.endPoint))
-            {
-                Endpoints.Add(state.endPoint);
-                EndpointDetected?.Invoke(this, state.endPoint);
+                _events.HandleStarted(this);
             }
-
-            DatagramReceived?.Invoke(this, state);
+            finally
+            {
+                _liveLock.ReleaseWriterLock();
+            }
         }
 
         /// <summary>
@@ -214,12 +150,33 @@ namespace SimpleUdp
         /// </summary>
         public void Stop()
         {
+            _liveLock.AcquireWriterLock(Math.Max(_socket.ReceiveTimeout, 1000) * 2);
             try
             {
-                _socket.Close();
+                _receiveThread?.Abort();
+                _receiveThread = null;
             } finally
             {
-                Started = false;
+                _liveLock.ReleaseWriterLock();
+            }
+        }
+
+        /// <summary>
+        /// Dispose.
+        /// </summary>
+        public void Dispose()
+        {
+            _liveLock.AcquireWriterLock(Math.Max(_socket.ReceiveTimeout, 1000) * 2);
+            try
+            {
+                if (Disposed) return;
+                Stop();
+                Disposed = true;
+                _socket.Dispose();
+            }
+            finally
+            {
+                _liveLock.ReleaseWriterLock();
             }
         }
 
@@ -423,10 +380,39 @@ namespace SimpleUdp
 
         #region Private-Methods
 
+        private async void BeginReceive()
+        {
+            var state = new Datagram(_socket.ReceiveBufferSize);
+            var res = _socket.BeginReceiveFrom(state.data, 0, _socket.ReceiveBufferSize, SocketFlags.None, ref state.endPoint, EndReceive, state);
+            res.AsyncWaitHandle.WaitOne(_socket.ReceiveTimeout == 0 ? int.MaxValue : _socket.ReceiveTimeout);
+        }
+
+        private void EndReceive(IAsyncResult result)
+        {
+            try
+            {
+                var state = (Datagram)result.AsyncState;
+
+                state.dataSize = _socket.EndReceiveFrom(result, ref state.endPoint);
+
+                if (!Endpoints.Contains(state.endPoint))
+                {
+                    Endpoints.Add(state.endPoint);
+                    EndpointDetected?.Invoke(this, state.endPoint);
+                }
+
+                DatagramReceived?.Invoke(this, state);
+            }
+            catch (ObjectDisposedException)
+            {
+                Stop();
+            }
+        }
+
         private void SendInternal(EndPoint ipe, byte[] data, int offset, int size)
         {
             if (data == null || data.Length == 0) throw new ArgumentNullException(nameof(data));
-            if (size > _maxDatagramSize) throw new ArgumentException("Data exceed maximum datagram size (" + data.Length + " data bytes, " + _maxDatagramSize + " bytes).");
+            if (size > _socket.SendBufferSize) throw new ArgumentException("Data exceed maximum datagram size (" + data.Length + " data bytes, " + _socket.SendBufferSize + " bytes).");
 
             _socket.SendTo(data, offset, size, SocketFlags.None, ipe);
         }
@@ -434,7 +420,7 @@ namespace SimpleUdp
         private async Task SendInternalAsync(EndPoint ipe, byte[] data, int offset, int size)
         {
             if (data == null || data.Length == 0) throw new ArgumentNullException(nameof(data));
-            if (size > _maxDatagramSize) throw new ArgumentException("Data exceed maximum datagram size (" + data.Length + " data bytes, " + _maxDatagramSize + " bytes).");
+            if (size > _socket.SendBufferSize) throw new ArgumentException("Data exceed maximum datagram size (" + data.Length + " data bytes, " + _socket.SendBufferSize + " bytes).");
 
             await _socket.SendToAsync(new ArraySegment<byte>(data, offset, size), SocketFlags.None, ipe).ConfigureAwait(false);
         }
