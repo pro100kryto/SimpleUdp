@@ -73,7 +73,7 @@ udp.Stop();
 [ Command/? for help ]:
 > bind 8001
 > start
-> send2 127.0.0.1 8000 hello to my friend on port 8001!
+> send 127.0.0.1 8000 hello to my friend on port 8001!
 [127.0.0.1:8000] hello back to you my friend!
 ```
  
