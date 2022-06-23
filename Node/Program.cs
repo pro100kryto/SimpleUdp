@@ -14,6 +14,11 @@ namespace Node
         {
             if (args != null && args.Length>0)
             {
+                if ("--help".Equals(args[0]))
+                {
+                    Usage();
+                    return;
+                }
                 int port = args.Length >= 2 ? int.Parse(args[1]) : 0;
                 InitEndPoint(args[0], port);
             }
@@ -44,8 +49,8 @@ namespace Node
                     {
                         if (_udpEndpoint != null && !_udpEndpoint.Disposed) throw new Exception("Already bind");
                         var split = userInput.Split(' ');
-                        string ip = split.Length < 2 ? "127.0.0.1" : split[1];
-                        int port = split.Length < 3 ? 0 : int.Parse(split[2]);
+                        int port = split.Length < 2 ? 0 : int.Parse(split[1]);
+                        string ip = split.Length < 3 ? "127.0.0.1" : split[2];
                         InitEndPoint(ip, port);
                         Console.WriteLine(_udpEndpoint.Socket.LocalEndPoint.ToString());
                     }
@@ -96,7 +101,7 @@ namespace Node
                         var msg = split[1];
                         _udpEndpoint.Send(_udpEndpoint.Socket.LocalEndPoint, msg);
                     }
-                    else if (userInput.StartsWith("send"))
+                    else if (userInput.StartsWith("sendL"))
                     {
                         var split = userInput.Split(' ');
 
@@ -104,7 +109,7 @@ namespace Node
                         var msg = split[2];
                         _udpEndpoint.Send(_udpEndpoint.Socket.LocalEndPoint.ToString().Split(':')[0], port, msg);
                     }
-                    else if (userInput.StartsWith("send2"))
+                    else if (userInput.StartsWith("send"))
                     {
                         var split = userInput.Split(' ');
 
@@ -137,28 +142,32 @@ namespace Node
             Console.Title = "SimpleUdp " + _udpEndpoint.Socket.LocalEndPoint.ToString();
         }
 
-        static void Menu()
+        static void Usage()
         {
             Console.WriteLine("");
             Console.WriteLine("Usage:");
-            Console.WriteLine("> node 127.0.0.1 8000");
-            Console.WriteLine("Starts the endpoint on IP address 127.0.0.1 port 8000");
+            Console.WriteLine("# node");
+            Console.WriteLine("# node 127.0.0.1 0");
+        }
+
+        static void Menu()
+        {
             Console.WriteLine("");
             Console.WriteLine("Available commands");
             Console.WriteLine("  q              quit");
             Console.WriteLine("  ?              help, this menu");
             Console.WriteLine("  cls            clear the screen");
             Console.WriteLine("  bind           create socket and bind 127.0.0.1");
-            Console.WriteLine("  bind [ip]      create socket and bind an spicific ip");
-            Console.WriteLine("  bind [ip] [port]      create socket and bind an specifics ip and port number");
+            Console.WriteLine("  bind [port]        create socket and bind an spicific ip");
+            Console.WriteLine("  bind [port] [ip]   create socket and bind an specifics ip and port number");
             Console.WriteLine("  list           list recent endpoints");
             Console.WriteLine("  start          start the endpoint");
             Console.WriteLine("  stop           stop the endpoint");
             Console.WriteLine("  dispose        close socket");
             Console.WriteLine("  status         show endpoint listener status");
             Console.WriteLine("  echo [msg]     send msg to yourself");
-            Console.WriteLine("  send [port] [msg]      send msg over the same ip");
-            Console.WriteLine("  send2 [ip] [port] [msg] send msg to cpecific endpoint");
+            Console.WriteLine("  sendL [port] [msg]     send msg over localhost");
+            Console.WriteLine("  send [ip] [port] [msg] send msg to cpecific endpoint");
             Console.WriteLine("");
         }
 
