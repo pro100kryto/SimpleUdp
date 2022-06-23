@@ -28,7 +28,7 @@ namespace SimpleUdp
         /// <summary>
         /// Retrieve a list of remote endpoints.
         /// </summary>
-        public List<EndPoint> Endpoints { get; } = new List<EndPoint>();
+        public List<EndPoint> EndPoints { get; } = new List<EndPoint>();
 
         /// <summary>
         /// Events.
@@ -58,6 +58,7 @@ namespace SimpleUdp
 
         private Thread _receiveThread = null;
         private readonly ReaderWriterLock _liveLock = new ReaderWriterLock();
+        private volatile bool _runThread = false;
 
         #endregion
 
@@ -65,45 +66,51 @@ namespace SimpleUdp
 
         /// <summary>
         /// Instantiate the UDP endpoint with default Ttl = 64 and BufferSize = 1024.
-        /// If you wish to also receive datagrams, set the 'DatagramReceived' event and call 'Start()'.
         /// </summary>
-        /// <param name="hostname">Local hostname.</param>
+        /// <param name="ipAddress">Local ip.</param>
         /// <param name="port">Local port number.</param>
-        public UdpEndpoint(string hostname, int port = 0) : this(new UdpClient(hostname, port))
+        public UdpEndpoint(string ipAddress, int port = 0) : this()
         {
-            _socket.Ttl = 64;
-            _socket.ReceiveBufferSize = 1024;
-            _socket.SendBufferSize = 1024;
+            _socket.Bind(new IPEndPoint(IPAddress.Parse(ipAddress), port));
         }
 
         /// <summary>
         /// Instantiate the UDP endpoint with default Ttl = 64 and BufferSize = 1024.
-        /// If you wish to also receive datagrams, set the 'DatagramReceived' event and call 'Start()'.
         /// </summary>
         /// <param name="port">Local port number.</param>
-        public UdpEndpoint(int port = 0) : this(new UdpClient(port))
+        public UdpEndpoint(int port = 0) : this()
         {
-            _socket.Ttl = 64;
-            _socket.ReceiveBufferSize = 1024;
-            _socket.SendBufferSize = 1024;
+            _socket.Bind(new IPEndPoint(IPAddress.Parse("127.0.0.1"), port));
         }
 
         /// <summary>
-        /// Use existing Socket from UdpClient.
-        /// If you wish to also receive datagrams, set the 'DatagramReceived' event and call 'Start()'.
+        /// Instantiate the UDP endpoint with default Ttl = 64 and BufferSize = 1024.
         /// </summary>
-        public UdpEndpoint(UdpClient udpClient) : this(udpClient.Client)
+        /// <param name="localEP">Local EndPoint.</param>
+        public UdpEndpoint(EndPoint localEP) : this()
         {
-            _socket.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.ReuseAddress, true);
+            _socket.Bind(localEP);
         }
 
         /// <summary>
         /// Use existing Socket.
-        /// If you wish to also receive datagrams, set the 'DatagramReceived' event and call 'Start()'.
         /// </summary>
         public UdpEndpoint(Socket socket)
         {
             _socket = socket;
+        }
+
+        /// <summary>
+        /// Instantiate the UDP endpoint with default Ttl = 64 and BufferSize = 1024.
+        /// </summary>
+        protected UdpEndpoint()
+        {
+            _socket = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.IP);
+            _socket.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.ReuseAddress, true);
+            _socket.Ttl = 64;
+            _socket.ReceiveBufferSize = 1024;
+            _socket.SendBufferSize = 1024;
+            _socket.ReceiveTimeout = 1000;
         }
 
         #endregion
@@ -116,22 +123,36 @@ namespace SimpleUdp
         /// <exception cref="InvalidOperationException">Already started</exception>
         public void Start()
         {
-            _liveLock.AcquireWriterLock(Math.Max(_socket.ReceiveTimeout, 1000) * 2);
+            _liveLock.AcquireWriterLock(GetWriteLockTimeout()*2);
             try
             {
                 if (Started) throw new InvalidOperationException("Already started");
+                _runThread = true;
 
                 _receiveThread = new Thread(() =>
                 {
-                    try
+                    while (_runThread)
                     {
-                        while (true)
+                        try
                         {
-                            BeginReceive();
+                            BeginReceive(GetWriteLockTimeout());
                         }
-                    }
-                    catch (Exception)
-                    {
+                        catch (ThreadInterruptedException)
+                        {
+                            break;
+                        }
+                        catch (ThreadAbortException)
+                        {
+                            break;
+                        }
+                        catch (ApplicationException)
+                        {
+                            break;
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine(ex.StackTrace);
+                        }
                     }
                     _events.HandleStopped(this);
                 });
@@ -146,16 +167,30 @@ namespace SimpleUdp
         }
 
         /// <summary>
-        /// Stop the UDP listener.
+        /// Request listener to be stopped.
+        /// </summary>
+        public void StopRequest()
+        {
+            _runThread = false;
+        }
+
+        /// <summary>
+        /// Stop the UDP listener inmediatly.
         /// </summary>
         public void Stop()
         {
-            _liveLock.AcquireWriterLock(Math.Max(_socket.ReceiveTimeout, 1000) * 2);
+            _runThread = false;
+
+            _liveLock.AcquireWriterLock(GetWriteLockTimeout() * 2);
             try
             {
-                _receiveThread?.Abort();
-                _receiveThread = null;
-            } finally
+                _receiveThread?.Interrupt();
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.Message);
+            }
+            finally
             {
                 _liveLock.ReleaseWriterLock();
             }
@@ -166,7 +201,7 @@ namespace SimpleUdp
         /// </summary>
         public void Dispose()
         {
-            _liveLock.AcquireWriterLock(Math.Max(_socket.ReceiveTimeout, 1000) * 2);
+            _liveLock.AcquireWriterLock(GetWriteLockTimeout()*2);
             try
             {
                 if (Disposed) return;
@@ -380,11 +415,19 @@ namespace SimpleUdp
 
         #region Private-Methods
 
-        private async void BeginReceive()
+        private async void BeginReceive(int timeoput)
         {
-            var state = new Datagram(_socket.ReceiveBufferSize);
-            var res = _socket.BeginReceiveFrom(state.data, 0, _socket.ReceiveBufferSize, SocketFlags.None, ref state.endPoint, EndReceive, state);
-            res.AsyncWaitHandle.WaitOne(_socket.ReceiveTimeout == 0 ? int.MaxValue : _socket.ReceiveTimeout);
+            _liveLock.AcquireWriterLock(timeoput);
+            try
+            {
+                var state = new Datagram(_socket.ReceiveBufferSize);
+                var res = _socket.BeginReceiveFrom(state.data, 0, _socket.ReceiveBufferSize, SocketFlags.None, ref state.endPoint, EndReceive, state);
+                res.AsyncWaitHandle.WaitOne(timeoput);
+            }
+            finally
+            {
+                _liveLock.ReleaseWriterLock();
+            }
         }
 
         private void EndReceive(IAsyncResult result)
@@ -395,9 +438,9 @@ namespace SimpleUdp
 
                 state.dataSize = _socket.EndReceiveFrom(result, ref state.endPoint);
 
-                if (!Endpoints.Contains(state.endPoint))
+                if (!EndPoints.Contains(state.endPoint))
                 {
-                    Endpoints.Add(state.endPoint);
+                    EndPoints.Add(state.endPoint);
                     EndpointDetected?.Invoke(this, state.endPoint);
                 }
 
@@ -423,6 +466,11 @@ namespace SimpleUdp
             if (size > _socket.SendBufferSize) throw new ArgumentException("Data exceed maximum datagram size (" + data.Length + " data bytes, " + _socket.SendBufferSize + " bytes).");
 
             await _socket.SendToAsync(new ArraySegment<byte>(data, offset, size), SocketFlags.None, ipe).ConfigureAwait(false);
+        }
+
+        private int GetWriteLockTimeout()
+        {
+            return _socket.ReceiveTimeout == 0 ? int.MaxValue : _socket.ReceiveTimeout;
         }
 
         #endregion
