@@ -1,16 +1,12 @@
-﻿![alt tag](https://github.com/jchristn/simpleudp/blob/master/assets/icon.ico)
+﻿![alt tag](/assets/icon.ico)
 
 # SimpleUdp
+Modified by pro100kryto.
+Original: https://github.com/jchristn/SimpleUdp
 
-## Simple wrapper for UDP client and server in C# 
+## Simple wrapper for UDP client and server in C#  
 
-[![NuGet Version](https://img.shields.io/nuget/v/SimpleUdp.svg?style=flat)](https://www.nuget.org/packages/SimpleUdp/) [![NuGet](https://img.shields.io/nuget/dt/SimpleUdp.svg)](https://www.nuget.org/packages/SimpleUdp)    
-
-SimpleUdp provides simple methods for creating your own UDP-based sockets application, enabling easy integration of sending data, receiving data, and building state machines.  
- 
-## New in v1.2.0
-
-- ```IDisposable```, thank you @jholzer
+SimpleUdp provides simple methods for creating your own UDP-based sockets application, enabling easy integration of sending data, receiving data, and building state machines.
 
 ## Help or Feedback
 
@@ -111,7 +107,3 @@ Send message from node 2 to node 1.
 mono --aot=nrgctx-trampolines=8096,nimt-trampolines=8096,ntrampolines=4048 --server myapp.exe
 mono --server myapp.exe
 ```
-
-## Version History
-
-Please refer to CHANGELOG.md.

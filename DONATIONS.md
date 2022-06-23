@@ -6,6 +6,7 @@ If you're interested in financially supporting this work on other open source pr
 
 | Method | Address |
 |--------|---------|
+| PayPal | @pro100kryto - https://paypal.me/pro100kryto?country.x=AR&locale.x=en_US |
 | PayPal | @joelchristner - https://paypal.me/joelchristner?country.x=US&locale.x=en_US |
 | Venmo  | @Joel-Christner - https://account.venmo.com/u/Joel-Christner |
 
@@ -13,6 +14,7 @@ If you're interested in financially supporting this work on other open source pr
 
 | Method   | Address |
 |----------|---------|
+| BitCoin (pro100kryto)  | bc1qt5aftm0xtpj6lzvzevzz80jwgrl5tvzhvn43wd |
 | Bitcoin  | 3HRgnvEWQBDdWDp75CFDsz3PirCYmftDwU |
 | Ethereum | 0xE064dC84270e17e2Ac34b2552461d672BdBC5e36 |
 
