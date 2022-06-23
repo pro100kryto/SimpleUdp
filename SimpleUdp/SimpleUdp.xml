@@ -54,7 +54,7 @@
             Event to fire when a datagram is received.
             </summary>
         </member>
-        <member name="P:SimpleUdp.UdpEndpoint.Endpoints">
+        <member name="P:SimpleUdp.UdpEndpoint.EndPoints">
             <summary>
             Retrieve a list of remote endpoints.
             </summary>
@@ -66,29 +66,31 @@
         </member>
         <member name="M:SimpleUdp.UdpEndpoint.#ctor(System.String,System.Int32)">
             <summary>
-            Instantiate the UDP endpoint with default Ttl = 64.
-            If you wish to also receive datagrams, set the 'DatagramReceived' event and call 'Start()'.
+            Instantiate the UDP endpoint with default Ttl = 64 and BufferSize = 1024.
             </summary>
-            <param name="hostname">Local hostname.</param>
+            <param name="ipAddress">Local ip.</param>
             <param name="port">Local port number.</param>
         </member>
         <member name="M:SimpleUdp.UdpEndpoint.#ctor(System.Int32)">
             <summary>
-            Instantiate the UDP endpoint with default Ttl = 64.
-            If you wish to also receive datagrams, set the 'DatagramReceived' event and call 'Start()'.
+            Instantiate the UDP endpoint with default Ttl = 64 and BufferSize = 1024.
             </summary>
             <param name="port">Local port number.</param>
         </member>
-        <member name="M:SimpleUdp.UdpEndpoint.#ctor(System.Net.Sockets.UdpClient)">
+        <member name="M:SimpleUdp.UdpEndpoint.#ctor(System.Net.EndPoint)">
             <summary>
-            Use existing Socket from UdpClient.
-            If you wish to also receive datagrams, set the 'DatagramReceived' event and call 'Start()'.
+            Instantiate the UDP endpoint with default Ttl = 64 and BufferSize = 1024.
             </summary>
+            <param name="localEP">Local EndPoint.</param>
         </member>
         <member name="M:SimpleUdp.UdpEndpoint.#ctor(System.Net.Sockets.Socket)">
             <summary>
             Use existing Socket.
-            If you wish to also receive datagrams, set the 'DatagramReceived' event and call 'Start()'.
+            </summary>
+        </member>
+        <member name="M:SimpleUdp.UdpEndpoint.#ctor">
+            <summary>
+            Instantiate the UDP endpoint with default Ttl = 64 and BufferSize = 1024.
             </summary>
         </member>
         <member name="M:SimpleUdp.UdpEndpoint.Start">
@@ -97,9 +99,14 @@
             </summary>
             <exception cref="T:System.InvalidOperationException">Already started</exception>
         </member>
+        <member name="M:SimpleUdp.UdpEndpoint.StopRequest">
+            <summary>
+            Request listener to be stopped.
+            </summary>
+        </member>
         <member name="M:SimpleUdp.UdpEndpoint.Stop">
             <summary>
-            Stop the UDP listener.
+            Stop the UDP listener inmediatly.
             </summary>
         </member>
         <member name="M:SimpleUdp.UdpEndpoint.Dispose">
