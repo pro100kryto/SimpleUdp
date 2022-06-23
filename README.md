@@ -69,34 +69,12 @@ udp.Stop();
 
 ## Or Use the Node Project
 
-Start node 1.
 ```
-Node\bin\Debug\netcoreapp3.1> node 127.0.0.1 8000
-```
-
-Start node 2.
-```
-Node\bin\Debug\netcoreapp3.1> node 127.0.0.1 8001
-```
-
-Send message from node 1 to node 2.  To do this, enter a command as follows:
-```
-[ip:port] [msg]
-```
-i.e.
-```
-127.0.0.1:8001 hello to my friend running on port 8001!
-```
-
-```
-[127.0.0.1:8000 Command/? for help]: 127.0.0.1:8001 hello to my friend on port 8001!
-```
-
-Send message from node 2 to node 1.
-```
-[127.0.0.1:8001 Command/? for help]: Endpoint detected: 127.0.0.1:8000
-[127.0.0.1:8000]: hello to my friend on port 8001!
-127.0.0.1:8000 hello back to you my friend!
+[ Command/? for help ]:
+> bind 8001
+> start
+> send2 127.0.0.1 8000 hello to my friend on port 8001!
+[127.0.0.1:8000] hello back to you my friend!
 ```
  
 ## Running under Mono
