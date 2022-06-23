@@ -123,7 +123,7 @@ namespace SimpleUdp
         /// <exception cref="InvalidOperationException">Already started</exception>
         public void Start()
         {
-            _liveLock.AcquireWriterLock(GetWriteLockTimeout()*2);
+            _liveLock.AcquireWriterLock(GetWriteLockTimeout());
             try
             {
                 if (Started) throw new InvalidOperationException("Already started");
@@ -181,7 +181,7 @@ namespace SimpleUdp
         {
             _runThread = false;
 
-            _liveLock.AcquireWriterLock(GetWriteLockTimeout() * 2);
+            _liveLock.AcquireWriterLock(GetWriteLockTimeout());
             try
             {
                 _receiveThread?.Interrupt();
@@ -201,7 +201,7 @@ namespace SimpleUdp
         /// </summary>
         public void Dispose()
         {
-            _liveLock.AcquireWriterLock(GetWriteLockTimeout()*2);
+            _liveLock.AcquireWriterLock(GetWriteLockTimeout());
             try
             {
                 if (Disposed) return;
@@ -470,7 +470,7 @@ namespace SimpleUdp
 
         private int GetWriteLockTimeout()
         {
-            return _socket.ReceiveTimeout == 0 ? int.MaxValue : _socket.ReceiveTimeout;
+            return (Disposed || _socket.ReceiveTimeout == 0) ? -1 : _socket.ReceiveTimeout;
         }
 
         #endregion
